@@ -5,7 +5,7 @@ import { weekOf, fmtRange, itemText } from "./program.js";
 import { state, subscribe, recordPractice, recordTest, addErr, removeErr, setDone } from "./store.js";
 
 const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const TYPE_NAME = {choice: "один ответ", multi: "один или несколько ответов", number: "ответ числом"};
+const TYPE_NAME = {choice: "один ответ", multi: "один или несколько ответов", number: "ответ числом", match: "соответствие"};
 const tests = new Map();
 let unsubHeader = null;
 
@@ -36,16 +36,48 @@ function problemCard(p, {num, total, onChange, order: fixedOrder} = {}){
 
   const ans = h("div", {class: "pans"});
   card.append(ans);
-  let selected = p.type === "multi" ? new Set() : null;
+  let selected = p.type === "multi" ? new Set() : p.type === "match" ? p.left.map(() => null) : null;
   let input = null;
   let locked = false;
   const optButtons = [];
+  const matchRows = [];
   let order = null;
+  const natural = (p.opts || []).map((_, i) => i);
+  if (p.opts) order = fixedOrder || (p.fixed ? natural : shuffle(natural));
+  const letterOf = (orig) => LETTERS[order.indexOf(orig)];
 
-  if (p.type === "choice" || p.type === "multi") {
+  if (p.type === "match") {
+    ans.append(h("p", {class: "hint", text: "Для каждого пункта выберите букву подходящего варианта."}));
+    const right = h("div", {class: "mright"});
+    order.forEach((orig, pos) => {
+      const it = h("div", {class: "mopt"});
+      it.append(h("span", {class: "ol", text: LETTERS[pos]}), h("span", {class: "ot"}, p.opts[orig]));
+      right.append(it);
+    });
+    const rows = h("div", {class: "mrows"});
+    p.left.forEach((html, i) => {
+      const row = h("div", {class: "mrow"});
+      row.append(h("div", {class: "ml"}, `<span class="mn">${i + 1}</span><span class="ot">${html}</span>`));
+      const btns = h("div", {class: "mbtns", role: "group", "aria-label": `Ответ для пункта ${i + 1}`});
+      const list = [];
+      order.forEach((orig, pos) => {
+        const b = h("button", {type: "button", class: "mb", "aria-pressed": "false", "data-k": orig, text: LETTERS[pos]});
+        b.addEventListener("click", () => {
+          if (locked) return;
+          selected[i] = orig;
+          list.forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+          onChange && onChange();
+        });
+        list.push(b);
+        btns.append(b);
+      });
+      matchRows.push(list);
+      row.append(btns);
+      rows.append(row);
+    });
+    ans.append(right, rows);
+  } else if (p.type === "choice" || p.type === "multi") {
     if (p.type === "multi") ans.append(h("p", {class: "hint", text: "Отметьте все верные варианты."}));
-    const natural = p.opts.map((_, i) => i);
-    order = fixedOrder || (p.fixed ? natural : shuffle(natural));
     const list = h("div", {class: "opts", role: "group"});
     order.forEach((orig, pos) => {
       const b = h("button", {type: "button", class: "opt", "aria-pressed": "false", "data-k": orig});
@@ -81,12 +113,16 @@ function problemCard(p, {num, total, onChange, order: fixedOrder} = {}){
     answer(){
       if (p.type === "choice") return selected;
       if (p.type === "multi") return selected.size ? [...selected].sort((a, b) => a - b) : null;
+      if (p.type === "match") return selected.some((x) => x == null) ? null : selected.slice();
       const v = input.value.trim();
       return v ? v : null;
     },
     set(a){
       if (a == null) return;
-      if (p.type === "choice") {
+      if (p.type === "match") {
+        selected = a.slice();
+        matchRows.forEach((list, i) => list.forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.k) === selected[i]))));
+      } else if (p.type === "choice") {
         selected = a;
         optButtons.forEach((x) => x.setAttribute("aria-pressed", String(Number(x.dataset.k) === a)));
       } else if (p.type === "multi") {
@@ -99,11 +135,12 @@ function problemCard(p, {num, total, onChange, order: fixedOrder} = {}){
     correct(a = api.answer()){
       if (a == null) return false;
       if (p.type === "choice") return a === p.ans;
-      if (p.type === "multi") return a.length === p.ans.length && a.every((x, i) => x === p.ans[i]);
+      if (p.type === "multi" || p.type === "match") return a.length === p.ans.length && a.every((x, i) => x === p.ans[i]);
       return sameNum(a, p.ans);
     },
     rightText(){
       if (p.type === "number") return showNum(p.ans) + (p.unit ? " " + p.unit : "");
+      if (p.type === "match") return p.ans.map((k, i) => `${i + 1} — ${letterOf(k)}`).join(", ");
       const letters = optButtons.filter((b) => (p.type === "choice" ? Number(b.dataset.k) === p.ans : p.ans.includes(Number(b.dataset.k))))
         .map((b) => b.querySelector(".ol").textContent);
       return letters.join(", ");
@@ -112,6 +149,7 @@ function problemCard(p, {num, total, onChange, order: fixedOrder} = {}){
       locked = true;
       card.querySelectorAll(".hint").forEach((e) => { e.hidden = true; });
       optButtons.forEach((b) => { b.disabled = true; });
+      matchRows.forEach((list) => list.forEach((b) => { b.disabled = true; }));
       if (input) input.readOnly = true;
     },
     reveal(){
@@ -119,6 +157,14 @@ function problemCard(p, {num, total, onChange, order: fixedOrder} = {}){
       const a = api.answer();
       if (p.type === "number") {
         input.classList.add(api.correct(a) ? "ok" : "bad");
+        return;
+      }
+      if (p.type === "match") {
+        matchRows.forEach((list, i) => list.forEach((b) => {
+          const k = Number(b.dataset.k);
+          if (k === p.ans[i]) b.classList.add("ok");
+          else if (selected[i] === k) b.classList.add("bad");
+        }));
         return;
       }
       const right = p.type === "choice" ? new Set([p.ans]) : new Set(p.ans);
@@ -241,7 +287,7 @@ function practice(root, problems, {title, onAnswer, emptyText} = {}){
 
 // ---------- Тест ----------
 
-function pickTest(problems, count){
+function pickLevels(problems, count){
   const want = count === 10 ? {A: 5, B: 3, C: 2} : {A: Math.round(count * 0.5), B: Math.round(count * 0.3), C: 0};
   if (count !== 10) want.C = count - want.A - want.B;
   const by = {A: shuffle(problems.filter((p) => p.lvl === "A")), B: shuffle(problems.filter((p) => p.lvl === "B")), C: shuffle(problems.filter((p) => p.lvl === "C"))};
@@ -253,27 +299,70 @@ function pickTest(problems, count){
   return out.sort((a, b) => order[a.lvl] - order[b.lvl]);
 }
 
+// plan: [[типы, сколько], ...] — состав как в варианте ЕНТ; группы идут в этом порядке.
+function pickTest(problems, count, plan){
+  if (!plan) return pickLevels(problems, count);
+  const out = [];
+  const used = new Set();
+  for (const [types, n] of plan) {
+    const pool = problems.filter((p) => types.includes(p.type) && !used.has(p));
+    const got = pickLevels(pool, n);
+    got.forEach((p) => used.add(p));
+    out.push(...got);
+  }
+  if (out.length < count) {
+    const rest = shuffle(problems.filter((p) => !used.has(p) && (p.type === "choice" || p.type === "number")));
+    while (out.length < count && rest.length) out.push(rest.pop());
+  }
+  return out;
+}
+
+// Баллы как на ЕНТ: один ответ — 1 балл; несколько ответов и соответствие — 2 балла, при одной ошибке 1.
+function entPoints(p, a){
+  if (a == null) return 0;
+  if (p.type === "multi") {
+    const right = new Set(p.ans), chosen = new Set(a);
+    let errs = 0;
+    for (const k of chosen) if (!right.has(k)) errs++;
+    for (const k of right) if (!chosen.has(k)) errs++;
+    return errs === 0 ? 2 : errs === 1 ? 1 : 0;
+  }
+  if (p.type === "match") {
+    const errs = p.ans.filter((k, i) => a[i] !== k).length;
+    return errs === 0 ? 2 : errs === 1 ? 1 : 0;
+  }
+  return null;
+}
+const maxPoints = (p) => (p.type === "multi" || p.type === "match" ? 2 : 1);
+
 function fmtTime(sec){
   sec = Math.max(0, Math.ceil(sec));
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 }
 
 function testView(root, L){
-  const count = L.mix ? 15 : 10;
+  const count = Math.min(L.mix ? L.count : 10, L.problems.length);
+  const minutes = L.mix ? L.minutes : count * 2;
   const pass = Math.ceil(count * 0.8);
   let T = tests.get(L.id);
 
   const startScreen = () => {
     root.innerHTML = "";
     const box = h("div", {class: "tstart"});
-    box.append(h("p", {}, `<b>${count} заданий, ${count * 2} минут</b> — по 2 минуты на задание, как на ЕНТ. ` +
-      (count === 10 ? "5 базовых, 3 средних и 2 сложных." : "Половина базовых, треть средних, остальные сложные.")));
-    box.append(h("p", {}, `Ответы проверяются в конце. Нужно ${pass} из ${count}, чтобы тема закрылась и пункт программы отметился сам. Ошибки попадут в раздел «Ошибки».`));
+    if (!count) {
+      box.append(h("p", {class: "empty", text: "Для этого теста ещё нет заданий: уроки, из которых он собирается, пока готовятся."}));
+      root.append(box);
+      return;
+    }
+    box.append(h("p", {}, `<b>${count} ${plural(count, "задание", "задания", "заданий")}, ${minutes} минут</b>. ` +
+      (count === 10 ? "5 базовых, 3 средних и 2 сложных — как распределены задания на ЕНТ." : "Половина базовых, треть средних, остальные сложные — как на ЕНТ.")));
+    if (L.plan) box.append(h("p", {}, "Ответы проверяются в конце, баллы считаются по правилам ЕНТ. Пункт программы отметится, когда пробник будет пройден. Ошибки попадут в раздел «Ошибки»."));
+    else box.append(h("p", {}, `Ответы проверяются в конце. Нужно ${pass} из ${count}, чтобы тема закрылась и пункт программы отметился сам. Ошибки попадут в раздел «Ошибки».`));
     const s = state.stats[L.id];
     if (s && s.t) box.append(h("p", {class: "muted", text: `Попыток: ${s.t}. Лучший результат: ${s.b}%.`}));
     const go = h("button", {type: "button", class: "primary", text: "Начать тест"});
     go.addEventListener("click", () => {
-      T = {items: pickTest(L.problems, count), answers: [], orders: [], cur: 0, end: Date.now() + count * 120000, done: false};
+      T = {items: pickTest(L.problems, count, L.plan), answers: [], orders: [], cur: 0, end: Date.now() + minutes * 60000, done: false};
       tests.set(L.id, T);
       running();
     });
@@ -370,18 +459,33 @@ function testView(root, L){
     });
     const oks = cards.map((c, i) => c.correct(T.answers[i]));
     const score = oks.filter(Boolean).length;
-    const percent = Math.round(score / T.items.length * 100);
-    const passed = score >= pass;
+    let percent = Math.round(score / T.items.length * 100);
+    let passed = score >= pass;
+    let points = 0, maxPts = 0;
+    if (L.plan) {
+      T.items.forEach((p, i) => {
+        const e = entPoints(p, T.answers[i]);
+        points += e == null ? (oks[i] ? 1 : 0) : e;
+        maxPts += maxPoints(p);
+      });
+      percent = Math.round(points / maxPts * 100);
+      passed = true;
+    }
 
     recordTest(L.id, percent);
     T.items.forEach((p, i) => { if (!oks[i]) addErr(errKey(p), p.from); else removeErr(errKey(p)); });
     if (passed) setDone(L.id, true);
 
-    const head = h("div", {class: "tres " + (passed ? "ok" : "bad")});
-    head.append(h("p", {class: "score"}, `${score} <span>из ${T.items.length}</span>`));
-    head.append(h("p", {}, passed
-      ? "<b>Тема закрыта.</b> Пункт программы отмечен. Ошибки, если были, — в разделе «Ошибки»."
-      : `<b>Нужно ${pass} из ${T.items.length}.</b> Ещё два дня на тему: перечитайте теорию, порешайте практику и пройдите тест снова. Ошибки — в разделе «Ошибки».`));
+    const head = h("div", {class: "tres " + (L.plan ? (percent >= 60 ? "ok" : "bad") : passed ? "ok" : "bad")});
+    if (L.plan) {
+      head.append(h("p", {class: "score"}, `${points} <span>из ${maxPts} баллов</span>`));
+      head.append(h("p", {}, `Верно решено ${score} из ${T.items.length} заданий. Баллы посчитаны по правилам ЕНТ. Запишите результат в блок «Пробники» на главной, если хотите видеть его на графике. Разбор каждого задания — ниже, ошибки — в разделе «Ошибки».`));
+    } else {
+      head.append(h("p", {class: "score"}, `${score} <span>из ${T.items.length}</span>`));
+      head.append(h("p", {}, passed
+        ? "<b>Тема закрыта.</b> Пункт программы отмечен. Ошибки, если были, — в разделе «Ошибки»."
+        : `<b>Нужно ${pass} из ${T.items.length}.</b> Ещё два дня на тему: перечитайте теорию, порешайте практику и пройдите тест снова. Ошибки — в разделе «Ошибки».`));
+    }
     const again = h("button", {type: "button", class: "primary", text: "Пройти тест ещё раз"});
     again.addEventListener("click", startScreen);
     head.append(again);
@@ -473,7 +577,8 @@ export async function lessonView(main, lid, mode){
   } else if (mode === "t") {
     if (L.mix) {
       const titles = await loadManifest();
-      body.append(h("p", {class: "muted", text: "Задания из уроков: " + L.mix.map((id) => (titles.lessons[id] || {}).t || id).join(", ") + "."}));
+      if (L.about) body.append(h("p", {class: "lede"}, L.about));
+      body.append(h("p", {class: "muted", text: "Задания из уроков: " + L.mix.map((id) => (titles.lessons[id] || {}).t || id).join(" · ") + "."}));
     }
     const holder = h("div");
     body.append(holder);
@@ -544,6 +649,60 @@ export async function errorsView(main){
   const all = h("button", {type: "button", class: "primary", text: `Перерешать все (${Object.keys(state.errs).length})`});
   all.addEventListener("click", () => startPractice(Object.keys(state.errs), "Все ошибки"));
   body.append(all, list);
+}
+
+// ---------- Справочник формул ----------
+
+let formulasP = null;
+export async function formulasView(main){
+  if (unsubHeader) { unsubHeader(); unsubHeader = null; }
+  main.innerHTML = "";
+  const crumbs = h("nav", {class: "crumbs"});
+  crumbs.append(h("a", {href: "#/", text: "← Программа"}));
+  main.append(crumbs);
+  const head = h("header", {class: "lhead"});
+  head.append(h("p", {class: "eyebrow", text: "Справочник"}), h("h1", {text: "Формулы и правила"}));
+  head.append(h("p", {class: "lede", text: "Все рамки с формулами и правилами из теории уроков — в одном месте и по порядку программы. Для повторения перед тестом и в последние недели перед ЕНТ."}));
+  const search = h("input", {type: "text", id: "fsearch", placeholder: "Поиск: например, «дискриминант» или «площадь»", "aria-label": "Поиск по формулам", autocomplete: "off"});
+  head.append(search);
+  main.append(head);
+  const body = h("section", {class: "lbody formulas"});
+  main.append(body);
+  if (!formulasP) formulasP = fetch("content/formulas.json", {cache: "no-cache"}).then((r) => r.json()).catch(() => ({lessons: []}));
+  const data = await formulasP;
+  if (!data.lessons.length) {
+    body.append(h("p", {class: "empty", text: "Справочник пока пуст."}));
+    return;
+  }
+  const blocks = [];
+  for (const L of data.lessons) {
+    const w = weekOf(L.id);
+    const sec = h("section", {class: "fl"});
+    const title = h("h2");
+    title.append(h("a", {href: `#/l/${L.id}`, text: L.t}));
+    sec.append(h("p", {class: "eyebrow", text: w ? `Неделя ${w.n}` : ""}), title);
+    for (const it of L.items) {
+      const b = h("div", {class: "fi"});
+      b.append(h("p", {class: "fh", text: it.h}), h("div", {class: "f"}, it.html));
+      sec.append(b);
+      blocks.push({el: b, sec, text: (L.t + " " + it.h + " " + b.textContent).toLowerCase()});
+    }
+    body.append(sec);
+  }
+  renderMath(body);
+  const empty = h("p", {class: "empty", text: "Ничего не нашлось. Попробуйте другое слово.", hidden: true});
+  body.append(empty);
+  search.addEventListener("input", () => {
+    const q = search.value.trim().toLowerCase();
+    const shown = new Set();
+    for (const bl of blocks) {
+      const ok = !q || bl.text.includes(q);
+      bl.el.hidden = !ok;
+      if (ok) shown.add(bl.sec);
+    }
+    body.querySelectorAll(".fl").forEach((s) => { s.hidden = !shown.has(s); });
+    empty.hidden = shown.size > 0;
+  });
 }
 
 export function plural(n, one, few, many){

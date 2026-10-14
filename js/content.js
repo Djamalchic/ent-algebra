@@ -30,10 +30,12 @@ export async function getLesson(lid){
   const entry = man.lessons[lid];
   if (!entry) return null;
   if (entry.mix) {
-    const parts = await Promise.all(entry.mix.map((id) => getLesson(id)));
+    const parts = await Promise.all(entry.mix.map((id) => getLesson(id).catch(() => null)));
+    const types = entry.types ? new Set(entry.types) : null;
     const problems = [];
-    for (const L of parts) if (L) for (const p of L.problems) problems.push({...p, from: L.id});
-    return {id: lid, title: entry.t, spec: [], theory: [], problems, mix: entry.mix};
+    for (const L of parts) if (L) for (const p of L.problems) if (!types || types.has(p.type)) problems.push({...p, from: L.id});
+    return {id: lid, title: entry.t, spec: [], theory: [], problems, mix: entry.mix,
+            count: entry.count || 15, minutes: entry.minutes || (entry.count || 15) * 2, about: entry.about || "", plan: entry.plan || null};
   }
   const data = await loadWeekFile(entry.f);
   const L = data.lessons.find((x) => x.id === lid);

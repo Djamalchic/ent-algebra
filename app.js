@@ -2,12 +2,13 @@
 
 import { initStore } from "./js/store.js";
 import { initHome, goToWeek } from "./js/home.js";
-import { lessonView, errorsView } from "./js/lesson.js";
+import { lessonView, errorsView, formulasView } from "./js/lesson.js";
 
 const home = document.getElementById("view-home");
 const page = document.getElementById("view-page");
 const navProgram = document.getElementById("nav-program");
 const navErrs = document.getElementById("nav-errs");
+const navFormulas = document.getElementById("nav-formulas");
 
 function route(){
   const hash = location.hash || "";
@@ -26,6 +27,13 @@ function route(){
     mark(navErrs);
     return;
   }
+  if (hash === "#/formulas") {
+    show(page);
+    formulasView(page);
+    window.scrollTo(0, 0);
+    mark(navFormulas);
+    return;
+  }
   const wasHidden = home.hidden;
   show(home);
   mark(navProgram);
@@ -39,7 +47,7 @@ function show(el){
   if (el !== page) page.innerHTML = "";
 }
 function mark(link){
-  for (const a of [navProgram, navErrs]) a.setAttribute("aria-current", a === link ? "page" : "false");
+  for (const a of [navProgram, navErrs, navFormulas]) a.setAttribute("aria-current", a === link ? "page" : "false");
 }
 
 initStore();

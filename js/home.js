@@ -1,6 +1,6 @@
 // Главная: «Сейчас», программа по неделям со ссылками на уроки, пробники.
 
-import { STAGES, WEEKS, ALL_IDS, fmtRange, currentWeek, todayISO, fmtISO, pad2 } from "./program.js";
+import { STAGES, WEEKS, ALL_IDS, LINKS, fmtRange, currentWeek, todayISO, fmtISO, pad2 } from "./program.js";
 import { state, subscribe, setDone, addMock, removeMock, syncInfo, authClick } from "./store.js";
 import { loadManifest } from "./content.js";
 
@@ -86,11 +86,15 @@ function addLessonLinks(){
     const slot = li.querySelector(".ilink");
     slot.innerHTML = "";
     const L = lessons[k];
-    if (!L) return;
     const a = document.createElement("a");
-    a.href = `#/l/${k}`;
     a.className = "lnk";
-    a.textContent = L.mix ? "Тест →" : "Урок →";
+    if (L) {
+      a.href = `#/l/${k}`;
+      a.textContent = L.plan ? "Пробник →" : L.mix ? "Тест →" : "Урок →";
+    } else if (LINKS[k]) {
+      [a.href, a.textContent] = LINKS[k];
+      a.classList.add("go");
+    } else return;
     slot.append(a);
   });
 }
