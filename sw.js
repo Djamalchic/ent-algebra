@@ -1,11 +1,18 @@
 // Кэш для работы без интернета: сначала сеть, при её отсутствии — сохранённая копия.
-const CACHE = "ent-algebra-v1";
+const CACHE = "ent-algebra-v2";
 const SHELL = [
   "./",
   "./index.html",
+  "./styles.css",
   "./app.js",
+  "./js/program.js",
+  "./js/store.js",
+  "./js/home.js",
+  "./js/lesson.js",
+  "./js/content.js",
   "./firebase-config.js",
   "./manifest.webmanifest",
+  "./content/manifest.json",
   "./icons/icon-192.png",
   "./icons/favicon.png"
 ];
@@ -29,6 +36,7 @@ self.addEventListener("fetch", (e) => {
   const cacheable =
     url.origin === self.location.origin ||
     (url.hostname === "www.gstatic.com" && url.pathname.startsWith("/firebasejs/")) ||
+    (url.hostname === "cdn.jsdelivr.net" && url.pathname.startsWith("/npm/katex@")) ||
     url.hostname === "fonts.googleapis.com" ||
     url.hostname === "fonts.gstatic.com";
   if (!cacheable) return;
