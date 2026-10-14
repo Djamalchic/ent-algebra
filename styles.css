@@ -122,6 +122,7 @@ button.ghost:disabled{opacity:.45; cursor:default}
 table{border-collapse:collapse; width:100%; font-size:.94rem}
 th,td{text-align:left; vertical-align:top; padding:8px 10px 8px 0; border-bottom:1px solid var(--line)}
 th{font-family:var(--f-mono); font-weight:500; font-size:.74rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+th .katex, .tablewrap th .katex{text-transform:none; letter-spacing:0; font-family:KaTeX_Main, serif; font-size:1.25em; color:var(--ink)}
 td.day{font-family:var(--f-mono); font-size:.86rem; white-space:nowrap; color:var(--pen)}
 td.time{font-family:var(--f-mono); font-size:.86rem; white-space:nowrap; font-variant-numeric:tabular-nums}
 ol.steps{margin:0; padding-left:1.3em; display:flex; flex-direction:column; gap:8px}
@@ -236,14 +237,14 @@ table.t tr:last-child td{border-bottom:0}
 
 /* Рисунки */
 .fig{margin:0; display:flex; flex-direction:column; gap:6px; align-items:flex-start}
-.fig svg{max-width:100%; height:auto; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; overflow:visible}
-.fig svg text{fill:currentColor; stroke:none; font-family:var(--f-body); font-size:13px}
-.fig svg .acc{stroke:var(--pen); stroke-width:2}
-.fig svg .on{fill:var(--pen); fill-opacity:.2}
-.fig svg .thin{stroke-width:1; stroke-dasharray:4 3; opacity:.8}
-.fig svg .dot{fill:currentColor; stroke:none}
-.fig svg .grid{stroke-width:.6; opacity:.22}
-.fig svg text.acc{fill:var(--pen); stroke:none}
+.fig > svg{max-width:100%; height:auto; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; overflow:visible}
+.fig > svg text{fill:currentColor; stroke:none; font-family:var(--f-body); font-size:13px}
+.fig > svg .acc{stroke:var(--pen); stroke-width:2}
+.fig > svg .on{fill:var(--pen); fill-opacity:.2}
+.fig > svg .thin{stroke-width:1; stroke-dasharray:4 3; opacity:.8}
+.fig > svg .dot{fill:currentColor; stroke:none}
+.fig > svg .grid{stroke-width:.6; opacity:.22}
+.fig > svg text.acc{fill:var(--pen); stroke:none}
 .fig figcaption{font-size:.85rem; color:var(--muted)}
 
 /* Формулы */
